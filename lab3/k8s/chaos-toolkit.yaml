@@ -1,0 +1,38 @@
+version: 1.0.0
+title: Kill one server pod and observe client resilience
+description: Verify circuit breaker and retries keep client responsive during backend pod failure.
+
+steady-state-hypothesis:
+  title: Client remains responsive
+  probes:
+    - type: probe
+      name: client-ping
+      tolerance: 200
+      provider:
+        type: http
+        timeout: 3
+        verify: true
+        url: "http://client-svc:8080/actuator/health"
+
+method:
+  - type: action
+    name: terminate-one-server-pod
+    provider:
+      type: k8s
+      action: terminate_pods
+      secrets: []
+      arguments:
+        label_selector: "app=server"
+        rand: true
+        ns: "default"
+        grace_period: 0
+  - type: probe
+    name: client-still-healthy
+    tolerance: true
+    provider:
+      type: http
+      timeout: 3
+      verify: true
+      url: "http://client-svc:8080/actuator/health"
+
+rollbacks: []

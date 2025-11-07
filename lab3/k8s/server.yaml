@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server-deploy
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: server }
+  template:
+    metadata:
+      labels: { app: server }
+    spec:
+      containers:
+        - name: server
+          image: local/serverservice:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8081
+          env:
+            - name: JAVA_OPTS
+              value: "-Xms128m -Xmx256m"
+            - name: APP_FLAKY_FAILURE_RATE
+              value: "0.35"
+            - name: APP_FLAKY_BASE_DELAY_MS
+              value: "120"
+          envFrom: []
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: server-svc
+spec:
+  selector: { app: server }
+  ports:
+    - port: 8081
+      targetPort: 8081

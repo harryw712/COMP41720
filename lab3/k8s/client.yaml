@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client-deploy
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: client }
+  template:
+    metadata:
+      labels: { app: client }
+    spec:
+      containers:
+        - name: client
+          image: local/clientservice:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: APP_BACKEND_BASEURL
+              value: "http://server-svc:8081"
+          ports:
+            - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: client-svc
+spec:
+  selector: { app: client }
+  ports:
+    - port: 8080
+      targetPort: 8080
