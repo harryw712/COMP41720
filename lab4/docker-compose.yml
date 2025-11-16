@@ -1,0 +1,198 @@
+version: '3.8'
+
+services:
+  # PostgreSQL for Book Service
+  postgres-book:
+    image: postgres:17.2
+    container_name: library-postgres-book
+    environment:
+      POSTGRES_DB: bookdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_book_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bookdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - library-network
+
+  # MongoDB for Borrow Service
+  mongodb-borrow:
+    image: mongo:8.0
+    container_name: library-mongodb-borrow
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+      MONGO_INITDB_DATABASE: borrowdb
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongodb_borrow_data:/data/db
+      - mongodb_borrow_config:/data/configdb
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--quiet"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - library-network
+
+  # Zookeeper for Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: library-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SYNC_LIMIT: 2
+    ports:
+      - "2181:2181"
+    networks:
+      - library-network
+
+  # Kafka Broker
+  kafka-broker:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: library-kafka-broker
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      - library-network
+
+  # Schema Registry
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.6.0
+    container_name: library-schema-registry
+    depends_on:
+      - kafka-broker
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka-broker:29092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    networks:
+      - library-network
+
+  # Kafka UI
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: library-kafka-ui
+    depends_on:
+      - kafka-broker
+      - schema-registry
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: library-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-broker:29092
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
+      DYNAMIC_CONFIG_ENABLED: 'true'
+    networks:
+      - library-network
+
+  # Book Service
+  book-service:
+    image: ${DOCKER_ACCOUNT:-myaccount}/library-book-service:latest
+    container_name: library-book-service
+    depends_on:
+      postgres-book:
+        condition: service_healthy
+    ports:
+      - "8082:8082"
+      - "50052:50052"
+    environment:
+      BOOK_POSTGRES_URL: jdbc:postgresql://postgres-book:5432/bookdb
+      BOOK_POSTGRES_USER: postgres
+      BOOK_POSTGRES_PASSWORD: postgres123
+    networks:
+      - library-network
+
+  # Borrow Service
+  borrow-service:
+    image: ${DOCKER_ACCOUNT:-myaccount}/library-borrow-service:latest
+    container_name: library-borrow-service
+    depends_on:
+      mongodb-borrow:
+        condition: service_healthy
+      kafka-broker:
+        condition: service_started
+      schema-registry:
+        condition: service_started
+      book-service:
+        condition: service_started
+    ports:
+      - "8081:8081"
+    environment:
+      BORROW_MONGODB_URI: mongodb://admin:admin123@mongodb-borrow:27017/borrowdb?authSource=admin
+      BOOK_GRPC_HOST: book-service
+      BOOK_GRPC_PORT: 50052
+      KAFKA_BOOTSTRAP_SERVERS: kafka-broker:29092
+      KAFKA_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+    networks:
+      - library-network
+
+  # Notification Service
+  notification-service:
+    image: ${DOCKER_ACCOUNT:-myaccount}/library-notification-service:latest
+    container_name: library-notification-service
+    depends_on:
+      - kafka-broker
+      - schema-registry
+    ports:
+      - "8083:8083"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka-broker:29092
+      KAFKA_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      MAILTRAP_HOST: sandbox.smtp.mailtrap.io
+      MAILTRAP_PORT: 2525
+      MAILTRAP_USERNAME: ${MAILTRAP_USERNAME:-your_username}
+      MAILTRAP_PASSWORD: ${MAILTRAP_PASSWORD:-your_password}
+    networks:
+      - library-network
+
+  # API Gateway
+  api-gateway:
+    image: ${DOCKER_ACCOUNT:-myaccount}/library-api-gateway:latest
+    container_name: library-api-gateway
+    depends_on:
+      - book-service
+      - borrow-service
+    ports:
+      - "9000:9000"
+    environment:
+      BOOK_SERVICE_URI: http://book-service:8082
+      BORROW_SERVICE_URI: http://borrow-service:8081
+    networks:
+      - library-network
+
+volumes:
+  postgres_book_data:
+    driver: local
+  mongodb_borrow_data:
+    driver: local
+  mongodb_borrow_config:
+    driver: local
+
+networks:
+  library-network:
+    driver: bridge

@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: library-config
+  namespace: library-system
+data:
+  # Book Service Configuration
+  BOOK_POSTGRES_URL: "jdbc:postgresql://postgres-book:5432/bookdb"
+  BOOK_POSTGRES_USER: "postgres"
+  
+  # Borrow Service Configuration
+  BORROW_MONGODB_URI: "mongodb://admin:admin123@mongodb-borrow:27017/borrowdb?authSource=admin"
+  BOOK_GRPC_HOST: "book-service"
+  BOOK_GRPC_PORT: "50052"
+  
+  # Kafka Configuration
+  KAFKA_BOOTSTRAP_SERVERS: "kafka-broker:29092"
+  KAFKA_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+  
+  # API Gateway Configuration
+  BOOK_SERVICE_URI: "http://book-service:8082"
+  BORROW_SERVICE_URI: "http://borrow-service:8081"
+  
+  # Mailtrap Configuration
+  MAILTRAP_HOST: "sandbox.smtp.mailtrap.io"
+  MAILTRAP_PORT: "2525"

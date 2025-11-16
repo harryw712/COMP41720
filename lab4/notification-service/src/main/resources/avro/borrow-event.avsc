@@ -1,0 +1,40 @@
+{
+  "type": "record",
+  "name": "BorrowEvent",
+  "namespace": "libsys.comp41720.events",
+  "fields": [
+    {
+      "name": "borrowId",
+      "type": "string"
+    },
+    {
+      "name": "memberName",
+      "type": "string"
+    },
+    {
+      "name": "memberEmail",
+      "type": "string"
+    },
+    {
+      "name": "bookTitle",
+      "type": "string"
+    },
+    {
+      "name": "bookIsbn",
+      "type": "string"
+    },
+    {
+      "name": "borrowDate",
+      "type": "string"
+    },
+    {
+      "name": "dueDate",
+      "type": "string"
+    },
+    {
+      "name": "eventType",
+      "type": "string"
+    }
+  ]
+}
+

@@ -1,0 +1,55 @@
+syntax = "proto3";
+package libsys.comp41720.grpc;
+
+option java_package = "libsys.comp41720.grpc";
+option java_outer_classname = "BookServiceProto";
+option java_multiple_files = true;
+
+service BookService {
+  rpc CheckBookAvailability(BookAvailabilityRequest) returns (BookAvailabilityResponse);
+  rpc UpdateBookStatus(BookStatusUpdateRequest) returns (BookStatusUpdateResponse);
+  rpc ReserveBook(BookReservationRequest) returns (BookReservationResponse);
+  rpc ReleaseBook(BookReleaseRequest) returns (BookReleaseResponse);
+}
+
+message BookAvailabilityRequest {
+  string isbn = 1;
+}
+
+message BookAvailabilityResponse {
+  bool available = 1;
+  int32 available_copies = 2;
+  string message = 3;
+}
+
+message BookStatusUpdateRequest {
+  string isbn = 1;
+  string status = 2;
+}
+
+message BookStatusUpdateResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message BookReservationRequest {
+  string isbn = 1;
+  int32 copies_needed = 2;
+}
+
+message BookReservationResponse {
+  bool success = 1;
+  string message = 2;
+  int64 book_id = 3;
+}
+
+message BookReleaseRequest {
+  string isbn = 1;
+  int32 copies_returned = 2;
+}
+
+message BookReleaseResponse {
+  bool success = 1;
+  string message = 2;
+}
+

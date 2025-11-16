@@ -1,0 +1,117 @@
+server:
+  port: 9000
+
+spring:
+  application:
+    name: api-gateway
+  
+  cloud:
+    gateway:
+      server:
+        webmvc:
+          routes:
+            # Book Service Routes
+            - id: book_service_route
+              uri: ${BOOK_SERVICE_URI:http://localhost:8082}
+              predicates:
+                - Path=/api/books/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    id: bookServiceCircuitBreaker
+                    fallbackUri: forward:/fallback/book-service
+                - name: Retry
+                  args:
+                    retries: 3
+                    methods: GET,PUT,DELETE
+                    statuses: BAD_GATEWAY,SERVICE_UNAVAILABLE,GATEWAY_TIMEOUT
+                    series: SERVER_ERROR
+                    backoff:
+                      firstBackoff: 100ms
+                      maxBackoff: 500ms
+                      factor: 2
+                      basedOnPreviousValue: false
+                      jitter:
+                        randomFactor: 0.3
+            
+            # Borrow Service Routes
+            - id: borrow_service_route
+              uri: ${BORROW_SERVICE_URI:http://localhost:8081}
+              predicates:
+                - Path=/api/borrows/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    id: borrowServiceCircuitBreaker
+                    fallbackUri: forward:/fallback/borrow-service
+                - name: Retry
+                  args:
+                    retries: 3
+                    methods: GET,PUT,DELETE
+                    statuses: BAD_GATEWAY,SERVICE_UNAVAILABLE,GATEWAY_TIMEOUT
+                    series: SERVER_ERROR
+                    backoff:
+                      firstBackoff: 100ms
+                      maxBackoff: 500ms
+                      factor: 2
+                      basedOnPreviousValue: false
+                      jitter:
+                        randomFactor: 0.3
+
+# Resilience4j Configuration
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        slow-call-rate-threshold: 100
+        slow-call-duration-threshold: 5s
+    
+    instances:
+      bookServiceCircuitBreaker:
+        base-config: default
+        register-health-indicator: true
+      
+      borrowServiceCircuitBreaker:
+        base-config: default
+        register-health-indicator: true
+  
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 15s
+    
+    instances:
+      bookServiceCircuitBreaker:
+        base-config: default
+      
+      borrowServiceCircuitBreaker:
+        base-config: default
+
+# Logging
+logging:
+  level:
+    libsys.comp41720: INFO
+    org.springframework.cloud.gateway: INFO
+    io.github.resilience4j: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+
+# Management endpoints for monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,circuitbreakers,circuitbreakerevents
+  endpoint:
+    health:
+      show-details: always
+  health:
+    circuitbreakers:
+      enabled: true

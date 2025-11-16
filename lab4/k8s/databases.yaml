@@ -1,0 +1,152 @@
+# PostgreSQL for Book Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-book
+  namespace: library-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-book
+  template:
+    metadata:
+      labels:
+        app: postgres-book
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17.2
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: "bookdb"
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: library-config
+                  key: BOOK_POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: database-secrets
+                  key: postgres-password
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - postgres
+                - -d
+                - bookdb
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - postgres
+                - -d
+                - bookdb
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgres-book-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-book
+  namespace: library-system
+spec:
+  selector:
+    app: postgres-book
+  ports:
+    - port: 5432
+      targetPort: 5432
+  type: ClusterIP
+
+---
+# MongoDB for Borrow Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb-borrow
+  namespace: library-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb-borrow
+  template:
+    metadata:
+      labels:
+        app: mongodb-borrow
+    spec:
+      containers:
+        - name: mongodb
+          image: mongo:8.0
+          ports:
+            - containerPort: 27017
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              value: "admin"
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: database-secrets
+                  key: mongodb-password
+            - name: MONGO_INITDB_DATABASE
+              value: "borrowdb"
+          volumeMounts:
+            - name: mongodb-data
+              mountPath: /data/db
+            - name: mongodb-config
+              mountPath: /data/configdb
+          livenessProbe:
+            exec:
+              command:
+                - mongosh
+                - --eval
+                - "db.adminCommand('ping')"
+                - --quiet
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - mongosh
+                - --eval
+                - "db.adminCommand('ping')"
+                - --quiet
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      volumes:
+        - name: mongodb-data
+          persistentVolumeClaim:
+            claimName: mongodb-borrow-data-pvc
+        - name: mongodb-config
+          persistentVolumeClaim:
+            claimName: mongodb-borrow-config-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-borrow
+  namespace: library-system
+spec:
+  selector:
+    app: mongodb-borrow
+  ports:
+    - port: 27017
+      targetPort: 27017
+  type: ClusterIP
